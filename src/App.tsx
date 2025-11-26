@@ -1,8 +1,5 @@
 import {
   Refine,
-  GitHubBanner,
-  WelcomePage,
-  Authenticated,
 } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
@@ -25,6 +22,12 @@ import routerProvider, {
   UnsavedChangesNotifier,
   DocumentTitleHandler,
 } from "@refinedev/react-router";
+
+import { TaskList } from "./pages/tasks/list";
+import { TaskCreate } from "./pages/tasks/create";
+import { TaskEdit } from "./pages/tasks/edit";
+import { TaskShow } from "./pages/tasks/show";
+
 import {
   BlogPostList,
   BlogPostCreate,
@@ -43,7 +46,6 @@ import { Header } from "./components/header";
 function App() {
   return (
     <BrowserRouter>
-      <GitHubBanner />
       <RefineKbarProvider>
         <ColorModeContextProvider>
           <AntdApp>
@@ -73,7 +75,17 @@ function App() {
                       canDelete: true,
                     },
                   },
-                ]}
+                  
+                  {
+                    name: "tasks",
+                    list: "/tasks",
+                    create: "/tasks/create",
+                    edit: "/tasks/edit/:id",
+                    show: "/tasks/show/:id",
+                  }
+                  ]}
+
+                
                 options={{
                   syncWithLocation: true,
                   warnWhenUnsavedChanges: true,
@@ -107,6 +119,14 @@ function App() {
                       <Route path="edit/:id" element={<CategoryEdit />} />
                       <Route path="show/:id" element={<CategoryShow />} />
                     </Route>
+
+                    <Route path="/tasks">
+                      <Route path="/tasks" element={<TaskList />} />
+                      <Route path="/tasks/create" element={<TaskCreate />} />
+                      <Route path="/tasks/edit/:id" element={<TaskEdit />} />
+                      <Route path="/tasks/show/:id" element={<TaskShow />} />
+                    </Route>
+
                     <Route path="*" element={<ErrorComponent />} />
                   </Route>
                 </Routes>

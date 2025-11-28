@@ -35,7 +35,7 @@ function App() {
                 <AntdApp>
                     <DevtoolsProvider>
                         <Refine
-                            dataProvider={dataProvider("https://api.fake-rest.refine.dev")}
+                            dataProvider={dataProvider("http://localhost:3001")}
                             notificationProvider={useNotificationProvider}
                             routerProvider={routerProvider}
                             resources={[

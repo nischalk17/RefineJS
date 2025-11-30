@@ -1,5 +1,5 @@
 import { List, useTable } from "@refinedev/antd";
-import { Table, Space, Tag, Input, Button, Select, notification } from "antd";
+import { Table, Space, Tag, Input, Button, Select, notification, TablePaginationConfig } from "antd";
 import {
   SearchOutlined,
   EyeOutlined,
@@ -8,6 +8,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigation, BaseRecord, useDelete } from "@refinedev/core";
 import { useState, useRef } from "react";
+import { useNavigate, useLocation } from "react-router";
 import { Popconfirm } from "antd";
 
 type TaskRecord = BaseRecord & {
@@ -56,6 +57,8 @@ const getPriorityForSorting = (record?: TaskRecord) => {
 export const TaskList = () => {
   const { show, edit } = useNavigation();
   const { mutate: deleteMutate } = useDelete();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [activeFilters, setActiveFilters] = useState<{ status: string[]; priority: string[]; title?: string }>({ status: [], priority: [], title: undefined });
   const titleDebounce = useRef<number | null>(null);
@@ -69,76 +72,94 @@ export const TaskList = () => {
     onChange: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => {
       const status = (filters?.status ?? []) as string[];
       const priority = (filters?.["meta.priority"] ?? []) as string[];
-      const titleFilter = ((filters?.title as string[]) ?? [])[0];
+      const titleFilter = ((filters?.["title_like"] as string[]) ?? (filters?.title as string[]) ?? [])[0];
       setActiveFilters({ status, priority, title: titleFilter });
       const originalOnChange = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
       if (originalOnChange) {
-        originalOnChange(pagination, filters, sorter);
+        // convert 'title' to 'title_like' for server-side substring search
+        let serverFilters = filters;
+        if (filters?.title) {
+          serverFilters = { ...filters, title_like: filters.title, title: [] };
+        }
+        originalOnChange(pagination, serverFilters, sorter);
       }
     },
   } as typeof tableProps;
 
   return (
     <List title="Tasks">
-      <Space style={{ marginBottom: 8 }}>
-        <span>Active filters:</span>
-        {activeFilters.status.map((s) => (
-          <Tag
-            key={`status-${s}`}
-            color="blue"
-            closable
-            onClose={() => {
-              const newStatus = activeFilters.status.filter((x) => x !== s);
-              setActiveFilters({ ...activeFilters, status: newStatus });
-              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
-              if (onChangeOriginal) {
-                onChangeOriginal(undefined, { status: newStatus, 'meta.priority': activeFilters.priority, title: activeFilters.title ? [activeFilters.title] : undefined }, undefined);
+      {((activeFilters.status.length > 0) || (activeFilters.priority.length > 0) || !!activeFilters.title) && (
+        <Space style={{ marginBottom: 8 }}>
+          <span>Active filters:</span>
+          {activeFilters.status.map((s) => (
+            <Tag
+              key={`status-${s}`}
+              color="blue"
+              closable
+              onClose={() => {
+                const newStatus = activeFilters.status.filter((x) => x !== s);
+                setActiveFilters({ ...activeFilters, status: newStatus });
+                const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                if (onChangeOriginal) {
+                  onChangeOriginal(undefined, { status: newStatus, 'meta.priority': activeFilters.priority, title: activeFilters.title ? [activeFilters.title] : [] }, undefined);
+                }
+              }}
+            >
+              {`Status: ${s}`}
+            </Tag>
+          ))}
+          {activeFilters.priority.map((p) => (
+            <Tag
+              key={`priority-${p}`}
+              color="purple"
+              closable
+              onClose={() => {
+                const newPriority = activeFilters.priority.filter((x) => x !== p);
+                setActiveFilters({ ...activeFilters, priority: newPriority });
+                const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                if (onChangeOriginal) {
+                  onChangeOriginal(undefined, { 'meta.priority': newPriority, status: activeFilters.status, title: activeFilters.title ? [activeFilters.title] : [] }, undefined);
+                }
+              }}
+            >
+              {`Priority: ${p}`}
+            </Tag>
+          ))}
+          {activeFilters.title && (
+            <Tag
+              closable
+              onClose={() => {
+                setActiveFilters({ ...activeFilters, title: undefined });
+                const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                if (onChangeOriginal) {
+                  onChangeOriginal(undefined, { status: activeFilters.status, 'meta.priority': activeFilters.priority, title: [] }, undefined);
+                }
+              }}
+            >
+              {`Title: ${activeFilters.title}`}
+            </Tag>
+          )}
+          <Button disabled={activeFilters.status.length===0 && activeFilters.priority.length===0 && !activeFilters.title} onClick={() => {
+            setActiveFilters({ status: [], priority: [], title: undefined });
+            // Use router navigate to clear URL query params (useTable syncWithLocation will re-run the list filter)
+            if (typeof navigate === "function") {
+              navigate(location.pathname, { replace: true });
+            }
+            // Fallback: call table's onChange with pagination set to first page
+            const pagination = (tableProps as unknown as { pagination?: TablePaginationConfig })?.pagination || {};
+            const pageSize = (pagination as TablePaginationConfig)?.pageSize;
+            const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+            if (typeof onChangeFn === "function") {
+              const paginationParam: TablePaginationConfig = { current: 1 };
+              if (typeof pageSize === "number") {
+                paginationParam.pageSize = pageSize;
               }
-            }}
-          >
-            {`Status: ${s}`}
-          </Tag>
-        ))}
-        {activeFilters.priority.map((p) => (
-          <Tag
-            key={`priority-${p}`}
-            color="purple"
-            closable
-            onClose={() => {
-              const newPriority = activeFilters.priority.filter((x) => x !== p);
-              setActiveFilters({ ...activeFilters, priority: newPriority });
-              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
-              if (onChangeOriginal) {
-                onChangeOriginal(undefined, { 'meta.priority': newPriority, status: activeFilters.status, title: activeFilters.title ? [activeFilters.title] : undefined }, undefined);
-              }
-            }}
-          >
-            {`Priority: ${p}`}
-          </Tag>
-        ))}
-        {activeFilters.title && (
-          <Tag
-            closable
-            onClose={() => {
-              setActiveFilters({ ...activeFilters, title: undefined });
-              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
-              if (onChangeOriginal) {
-                onChangeOriginal(undefined, { status: activeFilters.status, 'meta.priority': activeFilters.priority }, undefined);
-              }
-            }}
-          >
-            {`Title: ${activeFilters.title}`}
-          </Tag>
-        )}
-        <Button disabled={activeFilters.status.length===0 && activeFilters.priority.length===0 && !activeFilters.title} onClick={() => {
-          setActiveFilters({ status: [], priority: [], title: undefined });
-          // Clear table filters by triggering onChange with empty filters
-          const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
-          if (typeof onChangeFn === "function") {
-            onChangeFn(undefined, {}, undefined);
-          }
-        }}>Clear filters</Button>
-      </Space>
+              // explicitly pass empty arrays for known filters (status, meta.priority, and title_like/title)
+              onChangeFn(paginationParam, { status: [], 'meta.priority': [], title_like: [], title: [] }, undefined);
+            }
+          }}>Clear filters</Button>
+        </Space>
+      )}
 
       <Table {...wrappedTableProps} rowKey="id">
 
@@ -149,11 +170,16 @@ export const TaskList = () => {
               sorter={(a, b) => Number(a.id ?? 0) - Number(b.id ?? 0)}
             />
 
-        {/* TITLE */}
-            <Table.Column<TaskRecord>
+          <Table.Column<TaskRecord>
           dataIndex="title"
           title="Title"
           sorter={(a, b) => String(a.title ?? "").toLowerCase().localeCompare(String(b.title ?? "").toLowerCase())}
+          filteredValue={activeFilters.title ? [activeFilters.title] : undefined}
+          onFilter={(value, record) => {
+            const v = String(value).toLowerCase();
+            const titleVal = String(record.title ?? "").toLowerCase();
+            return titleVal.includes(v);
+          }}
           filterDropdown={({ setSelectedKeys, selectedKeys, confirm }) => (
             <div style={{ padding: 8 }}>
               <Input
@@ -164,19 +190,34 @@ export const TaskList = () => {
                   setSelectedKeys(e.target.value ? [e.target.value] : []);
                   if (titleDebounce.current !== null) {
                     window.clearTimeout(titleDebounce.current);
-                  }
-                  titleDebounce.current = window.setTimeout(() => {
-                    confirm();
-                  }, 300);
+                      }
+                      titleDebounce.current = window.setTimeout(() => {
+                        // Use tableProps.onChange directly with title_like filter for substring server-side match
+                        const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                        if (typeof onChangeFn === "function") {
+                          onChangeFn(undefined, { title_like: e.target.value ? [e.target.value] : [] }, undefined);
+                          setActiveFilters((prev) => ({ ...prev, title: e.target.value ? e.target.value : undefined }));
+                        }
+                      }, 300);
                 }}
-                onPressEnter={() => confirm()}
+                onPressEnter={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                  confirm();
+                  const value = (e.target as HTMLInputElement).value;
+                  setActiveFilters((prev) => ({ ...prev, title: value ? value : undefined }));
+                  const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                  if (typeof onChangeFn === "function") {
+                    onChangeFn(undefined, { title_like: value ? [value] : [] }, undefined);
+                  }
+                }}
                 style={{ width: 200, marginBottom: 8, display: "block" }}
               />
               <Button type="primary" onClick={() => {
                 confirm();
+                const titleVal = selectedKeys?.[0] ? String(selectedKeys?.[0]) : undefined;
+                setActiveFilters({ ...activeFilters, title: titleVal });
                 const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
                 if (typeof onChangeFn === "function") {
-                  onChangeFn(undefined, { title: selectedKeys?.[0] ? [String(selectedKeys?.[0])] : [] }, undefined);
+                    onChangeFn(undefined, { title_like: titleVal ? [titleVal] : [] }, undefined);
                 }
               }} size="small">
                 Search
@@ -220,6 +261,7 @@ export const TaskList = () => {
             </div>
           )}
           filterIcon={<SearchOutlined />}
+          filteredValue={activeFilters.status.length ? activeFilters.status : undefined}
           onFilter={(value, record) => {
             const v = String(value);
             const meta = parseMetaFromRecord(record);
@@ -271,6 +313,7 @@ export const TaskList = () => {
             </div>
           )}
           filterIcon={<SearchOutlined />}
+          filteredValue={activeFilters.priority.length ? activeFilters.priority : undefined}
           sorter={(a, b) => priorityRank(getPriorityForSorting(a)) - priorityRank(getPriorityForSorting(b))}
           onFilter={(value, record) => {
             const v = String(value);

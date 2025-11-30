@@ -99,6 +99,15 @@
         "priority": "medium"
       },
       "status": "in-progress"
+    },
+    {
+      "id": 13,
+      "title": "Fix title search",
+      "meta": {
+        "status": "todo",
+        "priority": "medium"
+      },
+      "status": "todo"
     }
   ]
 }

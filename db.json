@@ -1,26 +1,17 @@
 {
   "tasks": [
     {
-      "id": 1,
-      "title": "add priority ",
+      "id": "1",
+      "title": "add priority dit demo",
       "status": "completed",
-      "body": "{\"description\":\"added priority\",\"meta\":{\"status\":\"completed\",\"priority\":\"completed\"}}",
+      "body": "added priority",
       "meta": {
         "status": "completed",
         "priority": "completed"
       }
     },
     {
-      "id": 2,
-      "title": "add priority sorting",
-      "meta": {
-        "status": "todo",
-        "priority": "medium"
-      },
-      "status": "todo"
-    },
-    {
-      "id": 3,
+      "id": "3",
       "title": "Git Push",
       "meta": {
         "status": "todo",
@@ -29,16 +20,16 @@
       "status": "todo"
     },
     {
-      "id": 4,
+      "id": "4",
       "title": "keep task ids numeric only",
       "meta": {
-        "status": "todo",
-        "priority": "high"
+        "status": "completed",
+        "priority": "completed"
       },
-      "status": "todo"
+      "status": "completed"
     },
     {
-      "id": 5,
+      "id": "5",
       "title": "testing of completed status wrt priority",
       "meta": {
         "status": "completed",
@@ -47,13 +38,67 @@
       "status": "completed"
     },
     {
-      "id": 6,
+      "id": "6",
       "title": "testing if id are numeric or not while creating task",
+      "meta": {
+        "status": "completed",
+        "priority": "completed"
+      },
+      "status": "completed"
+    },
+    {
+      "id": "7",
+      "title": "sabin demo",
+      "meta": {
+        "status": "in-progress",
+        "priority": "medium"
+      },
+      "status": "in-progress"
+    },
+    {
+      "id": "8",
+      "title": "sabin demo finished",
+      "meta": {
+        "status": "completed",
+        "priority": "completed"
+      },
+      "status": "completed"
+    },
+    {
+      "id": 9,
+      "title": "Add filtering for Status",
+      "meta": {
+        "status": "in-progress",
+        "priority": "high"
+      },
+      "status": "in-progress"
+    },
+    {
+      "id": 10,
+      "title": "Add Auth",
       "meta": {
         "status": "todo",
         "priority": "high"
       },
       "status": "todo"
+    },
+    {
+      "id": 11,
+      "title": "Make filtering smooth",
+      "meta": {
+        "status": "todo",
+        "priority": "high"
+      },
+      "status": "todo"
+    },
+    {
+      "id": 12,
+      "title": "Testing after adding filtering for Status",
+      "meta": {
+        "status": "in-progress",
+        "priority": "medium"
+      },
+      "status": "in-progress"
     }
   ]
 }

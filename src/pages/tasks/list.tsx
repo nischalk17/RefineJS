@@ -1,5 +1,5 @@
 import { List, useTable } from "@refinedev/antd";
-import { Table, Space, Tag, Input, Button, notification } from "antd";
+import { Table, Space, Tag, Input, Button, Select, notification } from "antd";
 import {
   SearchOutlined,
   EyeOutlined,
@@ -7,7 +7,7 @@ import {
   DeleteOutlined,
 } from "@ant-design/icons";
 import { useNavigation, BaseRecord, useDelete } from "@refinedev/core";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Popconfirm } from "antd";
 
 type TaskRecord = BaseRecord & {
@@ -57,13 +57,90 @@ export const TaskList = () => {
   const { show, edit } = useNavigation();
   const { mutate: deleteMutate } = useDelete();
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [activeFilters, setActiveFilters] = useState<{ status: string[]; priority: string[]; title?: string }>({ status: [], priority: [], title: undefined });
+  const titleDebounce = useRef<number | null>(null);
   const { tableProps } = useTable<TaskRecord>({
     syncWithLocation: true,
   });
 
+  // Wrap tableProps.onChange to capture and sync filter state globally
+  const wrappedTableProps = {
+    ...tableProps,
+    onChange: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => {
+      const status = (filters?.status ?? []) as string[];
+      const priority = (filters?.["meta.priority"] ?? []) as string[];
+      const titleFilter = ((filters?.title as string[]) ?? [])[0];
+      setActiveFilters({ status, priority, title: titleFilter });
+      const originalOnChange = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+      if (originalOnChange) {
+        originalOnChange(pagination, filters, sorter);
+      }
+    },
+  } as typeof tableProps;
+
   return (
     <List title="Tasks">
-      <Table {...tableProps} rowKey="id">
+      <Space style={{ marginBottom: 8 }}>
+        <span>Active filters:</span>
+        {activeFilters.status.map((s) => (
+          <Tag
+            key={`status-${s}`}
+            color="blue"
+            closable
+            onClose={() => {
+              const newStatus = activeFilters.status.filter((x) => x !== s);
+              setActiveFilters({ ...activeFilters, status: newStatus });
+              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+              if (onChangeOriginal) {
+                onChangeOriginal(undefined, { status: newStatus, 'meta.priority': activeFilters.priority, title: activeFilters.title ? [activeFilters.title] : undefined }, undefined);
+              }
+            }}
+          >
+            {`Status: ${s}`}
+          </Tag>
+        ))}
+        {activeFilters.priority.map((p) => (
+          <Tag
+            key={`priority-${p}`}
+            color="purple"
+            closable
+            onClose={() => {
+              const newPriority = activeFilters.priority.filter((x) => x !== p);
+              setActiveFilters({ ...activeFilters, priority: newPriority });
+              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+              if (onChangeOriginal) {
+                onChangeOriginal(undefined, { 'meta.priority': newPriority, status: activeFilters.status, title: activeFilters.title ? [activeFilters.title] : undefined }, undefined);
+              }
+            }}
+          >
+            {`Priority: ${p}`}
+          </Tag>
+        ))}
+        {activeFilters.title && (
+          <Tag
+            closable
+            onClose={() => {
+              setActiveFilters({ ...activeFilters, title: undefined });
+              const onChangeOriginal = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+              if (onChangeOriginal) {
+                onChangeOriginal(undefined, { status: activeFilters.status, 'meta.priority': activeFilters.priority }, undefined);
+              }
+            }}
+          >
+            {`Title: ${activeFilters.title}`}
+          </Tag>
+        )}
+        <Button disabled={activeFilters.status.length===0 && activeFilters.priority.length===0 && !activeFilters.title} onClick={() => {
+          setActiveFilters({ status: [], priority: [], title: undefined });
+          // Clear table filters by triggering onChange with empty filters
+          const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+          if (typeof onChangeFn === "function") {
+            onChangeFn(undefined, {}, undefined);
+          }
+        }}>Clear filters</Button>
+      </Space>
+
+      <Table {...wrappedTableProps} rowKey="id">
 
         {/* ID Column (from minimal version) */}
             <Table.Column<TaskRecord>
@@ -82,13 +159,26 @@ export const TaskList = () => {
               <Input
                 placeholder="Search title..."
                 value={selectedKeys[0]}
-                onChange={(e) =>
-                  setSelectedKeys(e.target.value ? [e.target.value] : [])
-                }
+                onChange={(e) => {
+                  // Debounced set and confirm
+                  setSelectedKeys(e.target.value ? [e.target.value] : []);
+                  if (titleDebounce.current !== null) {
+                    window.clearTimeout(titleDebounce.current);
+                  }
+                  titleDebounce.current = window.setTimeout(() => {
+                    confirm();
+                  }, 300);
+                }}
                 onPressEnter={() => confirm()}
                 style={{ width: 200, marginBottom: 8, display: "block" }}
               />
-              <Button type="primary" onClick={() => confirm()} size="small">
+              <Button type="primary" onClick={() => {
+                confirm();
+                const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+                if (typeof onChangeFn === "function") {
+                  onChangeFn(undefined, { title: selectedKeys?.[0] ? [String(selectedKeys?.[0])] : [] }, undefined);
+                }
+              }} size="small">
                 Search
               </Button>
             </div>
@@ -99,6 +189,43 @@ export const TaskList = () => {
         {/* STATUS - take top-level status if present, else parse meta */}
             <Table.Column<TaskRecord>
           title="Status"
+          dataIndex="status"
+          filters={[
+            { text: "Todo", value: "todo" },
+            { text: "In Progress", value: "in-progress" },
+            { text: "Completed", value: "completed" },
+          ]}
+          // filterDropdown to make UI consistent with Title filter
+          filterDropdown={({ setSelectedKeys, selectedKeys, confirm }) => (
+            <div style={{ padding: 8 }}>
+              <Select
+                mode="multiple"
+                placeholder="Filter by status"
+                style={{ width: 200, marginBottom: 8, display: "block" }}
+                value={selectedKeys as string[]}
+                onChange={(values: string[]) =>{
+                  setSelectedKeys(values && values.length ? values : []);
+                  // auto-apply
+                  confirm();
+                }
+                }
+              >
+                <Select.Option value="todo">Todo</Select.Option>
+                <Select.Option value="in-progress">In Progress</Select.Option>
+                <Select.Option value="completed">Completed</Select.Option>
+              </Select>
+              <Button type="primary" onClick={() => { confirm(); }} size="small">
+                Apply
+              </Button>
+            </div>
+          )}
+          filterIcon={<SearchOutlined />}
+          onFilter={(value, record) => {
+            const v = String(value);
+            const meta = parseMetaFromRecord(record);
+            const recStatus = record.status || meta.status || "";
+            return recStatus === v;
+          }}
           render={(_, record) => {
             const meta = parseMetaFromRecord(record);
             const value = record.status || meta.status || "todo";
@@ -117,7 +244,44 @@ export const TaskList = () => {
         {/* PRIORITY */}
             <Table.Column<TaskRecord>
           title="Priority"
+          dataIndex="meta.priority"
+          filters={[
+            { text: "High", value: "high" },
+            { text: "Medium", value: "medium" },
+            { text: "Low", value: "low" },
+            { text: "Completed", value: "completed" },
+          ]}
+          filterDropdown={({ setSelectedKeys, selectedKeys, confirm }) => (
+            <div style={{ padding: 8 }}>
+              <Select
+                mode="multiple"
+                placeholder="Filter by priority"
+                style={{ width: 200, marginBottom: 8, display: "block" }}
+                value={selectedKeys as string[]}
+                onChange={(values: string[]) => { setSelectedKeys(values && values.length ? values : []); confirm(); }}
+              >
+                <Select.Option value="high">High</Select.Option>
+                <Select.Option value="medium">Medium</Select.Option>
+                <Select.Option value="low">Low</Select.Option>
+                <Select.Option value="completed">Completed</Select.Option>
+              </Select>
+              <Button type="primary" onClick={() => confirm()} size="small">
+                Apply
+              </Button>
+            </div>
+          )}
+          filterIcon={<SearchOutlined />}
           sorter={(a, b) => priorityRank(getPriorityForSorting(a)) - priorityRank(getPriorityForSorting(b))}
+          onFilter={(value, record) => {
+            const v = String(value);
+            const meta = parseMetaFromRecord(record);
+            let priorityVal = meta.priority || "low";
+            const status = record.status || meta.status;
+            if (status === "completed") {
+              priorityVal = "completed";
+            }
+            return priorityVal === v;
+          }}
           render={(_, record) => {
             const meta = parseMetaFromRecord(record);
             let value = meta.priority || "low";

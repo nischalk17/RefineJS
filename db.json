@@ -109,5 +109,10 @@
       },
       "status": "todo"
     }
+  ],
+  
+  "users": [
+    { "id": 1, "email": "admin1@gmail.com", "password": "admin1", "role": "admin" },
+    { "id": 2, "email": "member1@gmail.com", "password": "member1", "role": "member" }
   ]
 }

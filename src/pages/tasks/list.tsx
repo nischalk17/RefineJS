@@ -1,4 +1,4 @@
-import { List, useTable } from "@refinedev/antd";
+import { List, useTable, CreateButton } from "@refinedev/antd";
 import { Table, Space, Tag, Input, Button, Select, notification, TablePaginationConfig } from "antd";
 import {
   SearchOutlined,
@@ -10,6 +10,8 @@ import { useNavigation, BaseRecord, useDelete } from "@refinedev/core";
 import { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { Popconfirm } from "antd";
+import { usePermissions } from "@refinedev/core";
+
 
 type TaskRecord = BaseRecord & {
   id: number;
@@ -55,6 +57,7 @@ const getPriorityForSorting = (record?: TaskRecord) => {
 };
 
 export const TaskList = () => {
+  const { data: role } = usePermissions({});
   const { show, edit } = useNavigation();
   const { mutate: deleteMutate } = useDelete();
   const navigate = useNavigate();
@@ -65,6 +68,7 @@ export const TaskList = () => {
   const { tableProps } = useTable<TaskRecord>({
     syncWithLocation: true,
   });
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Wrap tableProps.onChange to capture and sync filter state globally
   const wrappedTableProps = {
@@ -87,7 +91,7 @@ export const TaskList = () => {
   } as typeof tableProps;
 
   return (
-    <List title="Tasks">
+    <List title="Tasks" headerButtons={role === "admin" ? <CreateButton /> : undefined}>
       {((activeFilters.status.length > 0) || (activeFilters.priority.length > 0) || !!activeFilters.title) && (
         <Space style={{ marginBottom: 8 }}>
           <span>Active filters:</span>
@@ -140,28 +144,72 @@ export const TaskList = () => {
             </Tag>
           )}
           <Button disabled={activeFilters.status.length===0 && activeFilters.priority.length===0 && !activeFilters.title} onClick={() => {
-            setActiveFilters({ status: [], priority: [], title: undefined });
-            // Use router navigate to clear URL query params (useTable syncWithLocation will re-run the list filter)
-            if (typeof navigate === "function") {
-              navigate(location.pathname, { replace: true });
+            if (process.env.NODE_ENV !== 'production') {
+              console.debug('Clear filters clicked', { activeFilters, locationSearch: location.search });
             }
-            // Fallback: call table's onChange with pagination set to first page
+            // Reset local activeFilters first to ensure filteredValue UI is cleared
+            setActiveFilters({ status: [], priority: [], title: undefined });
+            // Attempt to clear table filters first via tableProps.onChange (then navigate to clear URL)
             const pagination = (tableProps as unknown as { pagination?: TablePaginationConfig })?.pagination || {};
             const pageSize = (pagination as TablePaginationConfig)?.pageSize;
+            const onChangeFnBefore = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
+            if (typeof onChangeFnBefore === "function") {
+              const paginationParam: TablePaginationConfig = { current: 1 };
+              if (typeof pageSize === "number") {
+                paginationParam.pageSize = pageSize;
+              }
+              onChangeFnBefore(paginationParam, undefined, undefined);
+            }
+            // Then use router navigate to clear URL query params (useTable syncWithLocation will re-run the list filter)
+            if (typeof navigate === "function") {
+              try {
+                const currentParams = new URLSearchParams(location.search);
+                // Keep only pageSize and currentPage in the URL (clear filters and other params)
+                const keepKeys = new Set(["pageSize", "currentPage"]);
+                const newParams = new URLSearchParams();
+                for (const [k, v] of currentParams.entries()) {
+                  if (keepKeys.has(k)) {
+                    newParams.set(k, v);
+                  }
+                }
+                newParams.set("currentPage", "1");
+                navigate({ pathname: location.pathname, search: `?${newParams.toString()}` }, { replace: true });
+              } catch {
+                navigate({ pathname: location.pathname, search: "?page=1" }, { replace: true });
+              }
+            }
+            // Fallback: call table's onChange with pagination set to first page if we haven't already
             const onChangeFn = (tableProps as unknown as { onChange?: (pagination?: unknown, filters?: Record<string, (string | number)[]>, sorter?: unknown) => void })?.onChange;
             if (typeof onChangeFn === "function") {
               const paginationParam: TablePaginationConfig = { current: 1 };
               if (typeof pageSize === "number") {
                 paginationParam.pageSize = pageSize;
               }
-              // explicitly pass empty arrays for known filters (status, meta.priority, and title_like/title)
-              onChangeFn(paginationParam, { status: [], 'meta.priority': [], title_like: [], title: [] }, undefined);
+              // Use undefined filters to clear them explicitly
+              setTimeout(() => {
+                // Call onChange with undefined filters to clear them
+                onChangeFn(paginationParam, undefined, undefined);
+                if (process.env.NODE_ENV !== 'production') {
+                  console.debug('Clear filters: called tableProps.onChange with undefined filters', { paginationParam });
+                }
+                // Force table remount + reload as a stronger fallback
+                setTimeout(() => setReloadKey(prev => prev + 1), 50);
+              }, 300);
+            } else {
+              // If tableProps.onChange isn't available, fall back to a full at-page reload to ensure unfiltered results
+              setTimeout(() => {
+                const url = `${location.pathname}?pageSize=${pageSize ?? 10}&currentPage=1`;
+                if (process.env.NODE_ENV !== 'production') {
+                  console.debug('Clear filters fallback: full reload', { url });
+                }
+                window.location.replace(url);
+              }, 300);
             }
           }}>Clear filters</Button>
         </Space>
       )}
 
-      <Table {...wrappedTableProps} rowKey="id">
+      <Table key={reloadKey} {...wrappedTableProps} rowKey="id">
 
         {/* ID Column (from minimal version) */}
             <Table.Column<TaskRecord>

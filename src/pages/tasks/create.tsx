@@ -1,8 +1,11 @@
 import { Create, useForm } from "@refinedev/antd";
 import { Form, Input, Select, notification } from "antd";
 import type { FormInstance } from "antd";
-import { useCallback } from "react";
-import { useList, BaseRecord } from "@refinedev/core";
+import { useCallback, useEffect } from "react";
+import { useList, BaseRecord, usePermissions } from "@refinedev/core";
+import { useNavigate } from "react-router";
+
+// Role-based redirection moved inside the component
 
 type TaskRecord = {
   id?: number;
@@ -13,6 +16,13 @@ type TaskRecord = {
 };
 
 export const TaskCreate = () => {
+  const { data: role } = usePermissions({});
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (role && role !== "admin") {
+      navigate("/tasks");
+    }
+  }, [role, navigate]);
   const { formProps, saveButtonProps } = useForm<TaskRecord>();
   const { result } = useList({ resource: "tasks", pagination: { pageSize: 10000 } });
 

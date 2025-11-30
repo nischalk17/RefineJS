@@ -24,9 +24,12 @@ import { TaskList } from "./pages/tasks/list";
 import { TaskCreate } from "./pages/tasks/create";
 import { TaskEdit } from "./pages/tasks/edit";
 import { TaskShow } from "./pages/tasks/show";
+import { LoginPage } from "./pages/tasks/login";
 
 import { ColorModeContextProvider } from "./contexts/color-mode";
 import { Header } from "./components/header";
+
+import { authProvider } from "./authProvider";
 
 function App() {
     return (
@@ -35,6 +38,7 @@ function App() {
                 <AntdApp>
                     <DevtoolsProvider>
                         <Refine
+                            authProvider={authProvider}
                             dataProvider={dataProvider("http://localhost:3001")}
                             notificationProvider={useNotificationProvider}
                             routerProvider={routerProvider}
@@ -91,6 +95,8 @@ function App() {
                                         index
                                         element={<NavigateToResource resource="tasks" />}
                                     />
+
+                                    <Route path="/login" element={<LoginPage />} />
 
                                     {/* TASK ROUTES */}
                                     <Route path="tasks">
